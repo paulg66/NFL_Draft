@@ -49,7 +49,7 @@ ui <- navbarPage("NFL Draft",
                              box(title = "Worst Draft Pick",status = "danger", solidHeader = TRUE,fluidRow(column(5,htmlOutput("headshotWorst"),h3(textOutput("DashWorstName")),h4(htmlOutput("DashWorstGrade")),h4(textOutput("DashWorstYr")),h4(textOutput("DashWorstRndPick")),br(),h4(textOutput("DashWorstAV")),h4(textOutput("DashWorstxAV")),h4(htmlOutput("DashWorstdAV"))),column(7,plotOutput({"WorstGraph"}))))
                              
                          ),#fluidRow draft picks
-                         "AV = Approximate Value",br(),"Players Drafted From 2001-2018",br(), "Data Source: www.pro-football-reference.com",br(),"Created and Maintained by Paul Gallagher (@PaulGallagher12)")#body
+                         "AV = Approximate Value",br(),"Players Drafted From 2001-2018",br(),"Data Source: www.pro-football-reference.com",br(),br(),"Created and Maintained by Paul Gallagher (@PaulGallagher12)",br(),uiOutput('GitHubLink'))#body
                  )),#Teams   
                  
     tabPanel("Players",
@@ -611,10 +611,18 @@ server <- function(input, output) {
     output$teamdAV <- renderValueBox({valueBox(draftRanking()[which(draftRanking()$DraftTm == input$teamDash),2],tags$p(paste(input$teamDash,": Total Difference from Expected AV"),style = "font-size: 150%;"),icon = icon("trophy"),color = ifelse(input$teamDash != "ALL",as.character(colorsRank[which(colorsRank$Rank == which(draftRanking()$DraftTm == input$teamDash)),2]),'blue'))})
     output$teamAV <- renderValueBox({valueBox(draftRanking()[which(draftRanking()$DraftTm == input$teamDash),3],tags$p(paste(input$teamDash,": Total Rookie Contract AV"),style = "font-size: 150%;"),icon = icon("football-ball"),color = ifelse(input$teamDash != "ALL",as.character(colorsRank[which(colorsRank$Rank == which(draftRanking()$DraftTm == input$teamDash)),2]),'blue'))})
     
+    #Hyperlinks
     url <- a("Click ", href="https://www.pro-football-reference.com/blog/index37a8.html")
     output$AVLink <- renderUI({
         tagList("AV Explanation:", url)
     })
+    
+    urlGit <- a("Application Code ", href="https://github.com/paulg66/NFL_Draft")
+    output$GitHubLink <- renderUI({
+        tagList(urlGit)
+    })
+    
+
     
 }
 
