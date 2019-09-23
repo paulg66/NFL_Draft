@@ -1,0 +1,44 @@
+---
+title: "NFL Draft"
+output: html_document 
+---
+
+## The Goal
+The goal of this analysis is to answer these questions:
+
+* Which teams draft the best and which draft picks provided the best/worst value for their teams?
+
+* When drafting a certain position, which round should you draft the player in to achieve the highest value per pick?
+
+## The Data
+* All data is from pro-football-reference.com (draft data and NFL player performance data)
+
+## Methodology
+
+To be able to determine the value of a draft pick, we must first determine how to evaluate a player’s performance or value to their team during their time in the NFL. To do this, a metric known as approximate value (AV) will be used. Approximate Value, or AV, is a method of evaluating players developed by Doug Drinen from pro-football-reference.com; if you are interested in the details of his methodology you can read about at the link at the bottom of the page. The metric is designed to show that all players with one rating, say an 8, are collectively better than all players rated a 7. However, there will may be debate about how one of the players rated a 7 is better than another player rated an 8. The thing to keep in mind is that collectively, all of the 8’s are performed better than all of the 7’s.
+
+  
+We next need to look at what teams are trying to accomplish with most of their draft picks. Rookie contacts are the cheapest contract in the league and for a team to be successful they need players to out-perform the value of their contracts. With that being said, this analysis will only look at a player’s value in the first four years of their career, which is the time when a player is on their rookie contract. Once a player signs their second contract, the team is essentially paying market value for the player and the player’s draft position no longer matters. However, teams do get an advantage by being able to sign their top players before they become free agents. Which is something that I hope to quantify in future versions. However, the vast majority of players are not superstars and will test the free-agent market or may not sign another contract beyond their rookie contract. Ultimately, a draft pick’s value is a combination of where they are drafted and their performance during their rookie contract.
+
+## Acronyms and Calculations
+**AV** – Approximate Value
+
+**RookieAV** – Cumulative Approximate Value in the first four years in the NFL
+
+**dAV** – Delta Approximate Value, the difference between RookieAV and the expected approximate value for a player drafted in the same area of the draft and plays the same position
+
+**Grade** – Percentile of a player’s dAV, categorized by draft position and position played
+
+## Draft Grade Breakdown
+
+Draft_Grade  | Percentile 
+------------- | ------------- 
+Bust    |  Bottom 5%     
+Poor Pick        |   5%-25%
+Below Average Pick     |  40%-60%
+Average Pick       |  60%-75%
+Great Pick       |   75%-95
+Steal     |  Top 5%
+
+
+
