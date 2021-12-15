@@ -1,3 +1,4 @@
+
 ## The Goal
 The goal of this analysis is to answer these questions:
 
@@ -10,15 +11,19 @@ The goal of this analysis is to answer these questions:
 
 ## Methodology
 
-To be able to determine the value of a draft pick, we must first determine how to evaluate a player’s performance or value to their team during their time in the NFL. To do this, a metric known as approximate value (AV) will be used. Approximate Value, or AV, is a method of evaluating players developed by Doug Drinen from pro-football-reference.com; if you are interested in the details of his methodology you can read about at the link at the bottom of the page. The metric is designed to show that all players with one rating, say an 8, are collectively better than all players rated a 7. However, there will may be debate about how one of the players rated a 7 is better than another player rated an 8. The thing to keep in mind is that collectively, all of the 8’s are performed better than all of the 7’s.
+To be able to determine the value of a draft pick, we must first determine how to evaluate a player’s performance or value to their team during their time in the NFL. To do this, a metric known as approximate value (AV) will be used. Approximate Value, or AV, is a method of evaluating players developed by Doug Drinen from pro-football-reference.com; if you are interested in the details of his methodology you can read about at the link at the bottom of the page. The metric is designed to show that all players with one rating, say an 8, are collectively better than all players rated a 7. However, there will be debate about how one of the players rated a 7 is better than another player rated an 8. The thing to keep in mind is that collectively, all of the 8’s have performed better than all of the 7’s.
 
   
-We next need to look at what teams are trying to accomplish with most of their draft picks. Rookie contacts are the cheapest contract in the league and for a team to be successful they need players to out-perform the value of their contracts. With that being said, this analysis will only look at a player’s value in the first four years of their career, which is the time when a player is on their rookie contract. Once a player signs their second contract, the team is essentially paying market value for the player and the player’s draft position no longer matters. However, teams do get an advantage by being able to sign their top players before they become free agents. Which is something that I hope to quantify in future versions. However, the vast majority of players are not superstars and will test the free-agent market or may not sign another contract beyond their rookie contract. Ultimately, a draft pick’s value is a combination of where they are drafted and their performance during their rookie contract.
+We next need to look at what teams are trying to accomplish with most of their draft picks. Rookie contacts are the cheapest contract in the league and for a team to be successful they need their players to out-perform the value of their contracts. This is important because the NFL has a salary cap, and when players out-perform their contracts, teams can spend those additional resources on other positions. Additionally, drafting well is important to establish core pieces of a team. It is very difficult to find a superstar in free agency since they are rarely available, teams are usually able to retain their star players by signing them before they become free agents.
+
+The actual AV calculated in this analysis weighs years 5-8 of a player’s career at 50% if they are still with their draft team, compared to 100% for years 1-4. The change in weight is because in years 5-8 the player is being paid near market value, which results in lesser value per dollar compared to years 1-4.
 
 ## Acronyms and Calculations
 **AV** – Approximate Value
 
-**RookieAV** – Cumulative Approximate Value in the first four years in the NFL
+**xAV** - Expected Apporximate Value - The median AV for all players, of the same position, drafted in a certain position in the draft
+
+**Actual AV** – Cumulative Approximate Value in the first four years in the NFL + AV of years 5-8 if the player is still on their draft team, years 5-8 are weighted at 50%
 
 **dAV** – Delta Approximate Value, the difference between RookieAV and the expected approximate value for a player drafted in the same area of the draft and plays the same position
 
@@ -26,14 +31,12 @@ We next need to look at what teams are trying to accomplish with most of their d
 
 ## Draft Grade Breakdown
 
-Draft_Grade  | Percentile 
-------------- | ------------- 
-Bust    |  Bottom 5%     
-Poor Pick        |   5%-25%
-Below Average Pick     |  40%-60%
-Average Pick       |  60%-75%
-Great Pick       |   75%-95
-Steal     |  Top 5%
-
-
-
+Draft_Grade  |  Percentile 
+------------- | -------------- 
+Bust    |   Bottom 5%     
+Poor Pick        |    6%-25%
+Below Average Pick     |   26%-40%
+Average Pick       |   41%-60%
+Good Pick       |    61%-75%   
+Great Pick       |    76%-95%
+Steal     |   Top 5%
