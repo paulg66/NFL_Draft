@@ -1,147 +1,194 @@
 # Shiny R Application - NFL Draft
 # By: Paul Gallagher
 
+#----------------------------Pre Load----------------------------------
 
 library(shiny)
 library(ggplot2)
+library(ggimage)
 library(reshape)
 library(DT)
 library(shinydashboard)
 library(scales)
 library(pgirmess)
 library(dplyr)
+library(markdown)
+library(lamisc)
 
+#Load Data
+nflData <- read.csv("NFLData.csv",stringsAsFactors = FALSE)
+rookieDealAV <- read.csv("rookieDealAV.csv",stringsAsFactors = FALSE)
+rookieDealAVNon <- read.csv("rookieDealAVNon.csv",stringsAsFactors = FALSE)
+nflLogos <- read.csv("NFLLogos.csv",stringsAsFactors = FALSE)
 
-#Load Data from Dropbox
-nflData <- read.csv("https://www.dropbox.com/s/p4lfzkaib1fktu2/NFLData.csv?dl=1",stringsAsFactors = FALSE)
-rookieDealAV <- read.csv("https://www.dropbox.com/s/datmk8ea7y3p26s/rookieDealAV.csv?dl=1",stringsAsFactors = FALSE)
-rookieDealAVNon <- read.csv("https://www.dropbox.com/s/uuio8ddbeermk0o/rookieDealAVNon.csv?dl=1",stringsAsFactors = FALSE)
-nflLogos <- read.csv("https://www.dropbox.com/s/x4exm1ee0jrr50j/NFLLogos.csv?dl=1",stringsAsFactors = FALSE)
-
-PosSummary <- rookieDealAV %>% group_by(Rnd,Pos) %>% summarize(MedianAV = median(RookieAV))
-ClassifierSummary <- rookieDealAV %>% group_by(Rnd) %>% summarize(MedianAV = median(RookieAV),n = n())
+RndSummary <- rookieDealAV %>% group_by(Rnd) %>% dplyr::summarize(MedianAV = median(RookieAV),n = n())
+ClassifierSummary <- rookieDealAV %>% group_by(Classifier) %>% dplyr::summarize(MedianAV = median(RookieAV),n = n())
 
 ##Colors for Bar Graph
 colfunc<-colorRampPalette(c("red","yellow","green"))
-colorsBar <- data.frame(AV = seq(1:15),color = colfunc(15))
+colorsBar <- data.frame(AV = seq(1:20),color = colfunc(20))
+colorsBar <- rbind(colorsBar,data.frame(AV =seq(along.with = 21:40,from = 21),color = "#00FF00"))
 
 ##Colors for League Rankings
 colorsRank <- data.frame(Rank = seq(1:32),color = 'red')
 colorsRank$color <- ifelse(colorsRank$Rank > 10 & colorsRank$Rank <= 20,'yellow','red')
 colorsRank$color <- ifelse(colorsRank$Rank <= 10,'green',colorsRank$color)
 
-# Define UI for application that draws a histogram
+# UI-----
 ui <- navbarPage("NFL Draft",
-                 
-                 tabPanel("Teams",dashboardPage(
-                     
-                     #Page Title         
-                     dashboardHeader(title = "NFL Teams"),
-                     
-                     #DropDown for Team
-                     dashboardSidebar(selectInput("teamDash","Team",c("ALL",unique(rookieDealAV$DraftTm)[sort.list(unique(rookieDealAV$DraftTm))]),selected = "ARI"),htmlOutput("logo")),
-                     dashboardBody(fluidRow(
-                         column(4,selectInput("posTeam","Position",list("ALL","QB","RB","WR","TE","T","G","C","DT","EDGE","LB","DB","K"))),
-                         column(4,selectInput("draftYrTeam","Draft Year",c("ALL",unique(rookieDealAV$DraftYear)[sort.list(unique(rookieDealAV$DraftYear))])))),
-                         fluidRow(valueBoxOutput("NFLRanking"),valueBoxOutput("teamdAV"),valueBoxOutput("teamAV")),
-                         fluidRow(
-                             box(title = "Best Draft Pick",status = "success",solidHeader = TRUE, fluidRow(column(5,htmlOutput("headshotBest"),h3(textOutput("DashBestName")),h4(htmlOutput("DashBestGrade")),h4(textOutput("DashBestYr")),h4(textOutput("DashBestRndPick")),br(),h4(textOutput("DashBestAV")),h4(textOutput("DashBestxAV")),h4(htmlOutput("DashBestdAV"))),column(7,plotOutput({"BestGraph"})))),
-                             box(title = "Worst Draft Pick",status = "danger", solidHeader = TRUE,fluidRow(column(5,htmlOutput("headshotWorst"),h3(textOutput("DashWorstName")),h4(htmlOutput("DashWorstGrade")),h4(textOutput("DashWorstYr")),h4(textOutput("DashWorstRndPick")),br(),h4(textOutput("DashWorstAV")),h4(textOutput("DashWorstxAV")),h4(htmlOutput("DashWorstdAV"))),column(7,plotOutput({"WorstGraph"}))))
-                             
-                         ),#fluidRow draft picks
-                         "AV = Approximate Value",br(),"Players Drafted From 2001-2018",br(),"Data Source: www.pro-football-reference.com",br(),br(),"Created and Maintained by Paul Gallagher (@PaulGallagher12)",br(),uiOutput('GitHubLink'))#body
+                 #-------------------------------------Dashboards--------------------                 
+                 tabPanel("Teams",dashboardPage(skin = "blue",
+                                                
+                                                #Page Title         
+                                                dashboardHeader(title = "NFL Teams"),
+                                                
+                                                #DropDown for Team
+                                                dashboardSidebar(selectInput("teamDash","Team",c("ALL",unique(rookieDealAV$DraftTm)[sort.list(unique(rookieDealAV$DraftTm))]),selected = "ARI"),htmlOutput("logo")),
+                                                dashboardBody(fluidRow(
+                                                  column(4,selectInput("posTeam","Position",list("ALL","QB","RB","WR","TE","T","G","C","DT","EDGE","LB","DB","K"))),
+                                                  column(4,selectInput("draftYrTeam","Draft Year",c("ALL",unique(rookieDealAV[which(rookieDealAV$DraftYear != 2000),"DraftYear"])[sort.list(unique(rookieDealAV[which(rookieDealAV$DraftYear != 2000),"DraftYear"]))])))),
+                                                  fluidRow(valueBoxOutput("NFLRanking"),valueBoxOutput("teamdAV"),valueBoxOutput("teamAV")),
+                                                  fluidRow(
+                                                    box(title = "Best Draft Pick",status = "success",solidHeader = TRUE, fluidRow(column(5,htmlOutput("headshotBest"),h3(textOutput("DashBestName")),h4(htmlOutput("DashBestGrade")),h4(textOutput("DashBestYr")),h4(textOutput("DashBestRndPick")),br(),h4(textOutput("DashBestAV")),h4(textOutput("DashBestxAV")),h4(htmlOutput("DashBestdAV"))),column(7,plotOutput({"BestGraph"})))),
+                                                    box(title = "Worst Draft Pick",status = "danger", solidHeader = TRUE,fluidRow(column(5,htmlOutput("headshotWorst"),h3(textOutput("DashWorstName")),h4(htmlOutput("DashWorstGrade")),h4(textOutput("DashWorstYr")),h4(textOutput("DashWorstRndPick")),br(),h4(textOutput("DashWorstAV")),h4(textOutput("DashWorstxAV")),h4(htmlOutput("DashWorstdAV"))),column(7,plotOutput({"WorstGraph"}))))
+                                                  ),#fluidRow draft picks
+                                                  "Viewing on a mobile device? Click the 3 solid white lines near the top of the page to change teams",br(),br(),"AV = Approximate Value",br(),"Players Drafted From 2001-2021",br(),"Data Source: www.pro-football-reference.com",br(),br(),uiOutput('RedditLink'),br(),uiOutput('GitHubLink'),uiOutput("FeedbackLink"))#body
                  )),#Teams   
-                 
-    tabPanel("Players",
-        titlePanel("NFL Players"),
-            fluidRow(
-                column(3,
-                    selectInput("team","Team",c("ALL",unique(rookieDealAV$DraftTm)[sort.list(unique(rookieDealAV$DraftTm))]))
-                ),
-                column(3,
-                    selectInput("posPlayers","Position",list("ALL","QB","RB","WR","TE","T","G","C","DT","EDGE","LB","DB","K"))
-                ),
-                column(3,
-                    selectInput("rndPlayers","Round",list("ALL",1,2,3,4,5,6,7))
-                ),
-                column(3,
-                    selectInput("draftYr","Draft Year",c("ALL",unique(rookieDealAV$DraftYear)[sort.list(unique(rookieDealAV$DraftYear))]))
-                              )
-                ),#fluid Row 
-        DT::dataTableOutput("PlayerTable")
-                          
-    ),#Players  
+                 #-----------------------Tables------------------------------              
+                 tabPanel("Tables",
+                          tabsetPanel(type = "tabs",
+                                      tabPanel("Players",
+                                               titlePanel("NFL Players"),
+                                               fluidRow(
+                                                 column(3,
+                                                        selectInput("team","Team",c("ALL",unique(rookieDealAV$DraftTm)[sort.list(unique(rookieDealAV$DraftTm))]))
+                                                 ),
+                                                 column(3,
+                                                        selectInput("posPlayers","Position",list("ALL","QB","RB","WR","TE","T","G","C","DT","EDGE","LB","DB","K"))
+                                                 ),
+                                                 column(3,
+                                                        selectInput("rndPlayers","Round",list("ALL",1,2,3,4,5,6,7))
+                                                 ),
+                                                 column(3,
+                                                        selectInput("draftYr","Draft Year",c("ALL",unique(rookieDealAV[which(rookieDealAV$DraftYear != 2000),"DraftYear"])
+                                                                                             [sort.list(unique(rookieDealAV[which(rookieDealAV$DraftYear != 2000),"DraftYear"]))]))
+                                                 )
+                                               ),#fluid Row 
+                                               DT::dataTableOutput("PlayerTable"),
+                                               "AV - Approximate Value - First 4 years + next 4 years if the player is still with their draft team, years 4-8 weighted at 50%",br(), "xAV - Expected Approximate Value", br(),"dAV – Difference between expected and actual approximate value"
+                                      ),#Players
+                                      tabPanel("Draft Classes",verbatimTextOutput("value"),
+                                               titlePanel("Draft Classes"),
+                                               checkboxGroupInput("radio_draft_class", label = h4("Grouping Options:"), 
+                                                                  choices = list("Team" = "Team", "Position" = "Pos","Draft Year" = "Yr"),
+                                                                  selected = c("Team","Yr"), inline = TRUE),
+                                               DT::dataTableOutput("Draft_Class_Table"),
+                                               "dAV – Difference between expected and actual approximate value",br(),"Draft Ranking - For position & team groups - ranking is within a draft year; otherwise all-time"
+                                      )#Draft Years
+                          )#Tabset Panel               
+                 ),#Tables  
+                 #--------------------------Statistical Tests-------------------------------
+                 tabPanel("Statistical Tests",navbarPage("",
+                                                         tabPanel("ANOVA - By Position",             
+                                                                  
+                                                                  # Application title
+                                                                  titlePanel("NFL Draft - By Position"),
+                                                                  
+                                                                  # Dropdown for Pos
+                                                                  sidebarLayout(
+                                                                    sidebarPanel(
+                                                                      selectInput("pos",
+                                                                                  label = "Select Position",
+                                                                                  choices = list("ALL","QB","RB","WR","TE","T","G","C","DT","EDGE","LB","DB","K")
+                                                                      ),verbatimTextOutput("PosTable"),h6("Kruskal-Wallis Test - p-Value: 0.05")
+                                                                    ),
+                                                                    
+                                                                    # Show boxplot
+                                                                    mainPanel(plotOutput("PosGraph"),plotOutput("PosAvgGraph")
+                                                                    )
+                                                                  )
+                                                         ),##tab Panel by Pos
+                                                         tabPanel("ANOVA - By Round",
+                                                                  # Application title
+                                                                  titlePanel("NFL Draft - By Round"),
+                                                                  # Dropdown for Round
+                                                                  sidebarLayout(
+                                                                    sidebarPanel(
+                                                                      selectInput("rnd",
+                                                                                  label = "Select Round",
+                                                                                  choices = list("ALL",1,2,3,4,5,6,7)
+                                                                      ),verbatimTextOutput("RndTable"),h6("Kruskal-Wallis Test - p-Value: 0.05")
+                                                                    ),
+                                                                    # Show boxplot
+                                                                    mainPanel(plotOutput("RndGraph"))
+                                                                  )
+                                                         ),##Tab Player Probability
+                                                         tabPanel("Player Probabilities",
+                                                                  # Application title
+                                                                  titlePanel("The Probabilty of Drafting a Comparable Player"),
+                                                                  h5("This section calculates the probability of drafting a player with comparable production in each section of the draft. 
+                                                                     Drop down only includes players with a minimum AV of 30"),
+                                                    
+                                                                  selectInput('ProbSelect', 'Select a Player', unique(rookieDealAVNon[which(rookieDealAVNon$RookieAV >= 25),"PlayerID"])
+                                                                                                               [sort.list(unique(rookieDealAVNon[which(rookieDealAVNon$RookieAV >= 25),"PlayerID"]))],selected = "David Johnson3-86", selectize=TRUE),
+                                                                  verbatimTextOutput("PlayerProbTable")
+                                                         ))##tabpanel By round
+                          #Write_up--------------------------------------------------------------
+                 ),tabPanel("Methodology",fluidPage(includeMarkdown("https://www.dropbox.com/s/vdd752d67pxqaeq/Shiny%20Writeup.md?dl=1"),hr(),uiOutput('AVLink'),br()))#Navbar, statistical tests
+                 ,tabPanel("Settings",sliderInput("draftYrGlobal","Select Draft Years - Filters all Tables & Charts",min = 2000, max = max(rookieDealAV$DraftYear),value = c(2000, max(rookieDealAV$DraftYear)),sep ='',step = 1))
+)#UI
 
-    tabPanel("Statistical Tests",navbarPage("",
-    tabPanel("ANOVA - By Position",             
-
-    # Application title
-    titlePanel("NFL Draft - By Position"),
-
-    # Dropdown for Pos
-    sidebarLayout(
-        sidebarPanel(
-            selectInput("pos",
-                        label = "Selection Position",
-                        choices = list("ALL","QB","RB","WR","TE","T","G","C","DT","EDGE","LB","DB","K")
-            ),verbatimTextOutput("PosTable"),h6("Kruskal-Wallis Test - p-Value: 0.05")
-        ),
-        
-        # Show boxplot
-        mainPanel(plotOutput("PosGraph"),plotOutput("PosAvgGraph")
-        )
-    )
-    ),##tab Panel by Pos
-    tabPanel("ANOVA - By Round",
-    # Application title
-    titlePanel("NFL Draft - By Round"),
-    # Dropdown for Round
-    sidebarLayout(
-        sidebarPanel(
-            selectInput("rnd",
-                        label = "Selection Round",
-                        choices = list("ALL",1,2,3,4,5,6,7)
-            ),verbatimTextOutput("RndTable"),h6("Kruskal-Wallis Test - p-Value: 0.05")
-        ),
-        # Show boxplot
-        mainPanel(plotOutput("RndGraph"))
-    )
-    ))##tabpanel By round
-
-    ),tabPanel("Methodology",fluidPage(includeMarkdown("https://www.dropbox.com/s/eerqntvsbn887ge/Shiny%20Writeup.Rmd?dl=1"),hr(),uiOutput('AVLink'),br()))#Navbar, statistical tests
-)
-
-# SERVER START______________________________________________________________________________________________________________
-server <- function(input, output) {
-
-    colors <- data.frame("Grade" = c("Bust","Poor Pick","Below Average Pick","Average Pick","Good Pick","Great Pick","Steal"),"ColorCode" = c("#4f0101","#b80000","#ff5500","#808080","#04c729","#017016", "#3495eb"))
+# SERVER START-------------------------------------------------------------------------
+server <- function(input, output,session) {
+    colors <- data.frame("Grade" = c("Bust","Poor Pick","Below Average Pick","Average Pick","Good Pick","Great Pick","Steal","Strategic Pick"),"ColorCode" = c("#4f0101","#b80000","#ff5500","#808080","#04c729","#017016", "#3495eb","#000000"))
     
+    #Update Draft Year Based on Slider
+    observe({
+      years <- c("ALL",seq(input$draftYrGlobal[1],input$draftYrGlobal[2],1))
+      if(2000 %in% years){
+        years <- years[-2]
+      }
+      updateSelectInput(session,"draftYrTeam",choices = years,selected = "ALL")
+      updateSelectInput(session,"draftYr",choices = years,selected = "ALL")
+    })#Update Drop Down
+    
+# Statistical Tests - Server ----------------------------------------------
     ##By Position Graph
     output$PosGraph <- renderPlot({
+      ggSubset <- rookieDealAV[which(rookieDealAV$DraftYear >= input$draftYrGlobal[1] & 
+                                           rookieDealAV$DraftYear <= input$draftYrGlobal[2]),]
+      ggSubset$Classifier <- factor(ggSubset$Classifier,c("Top 5","6-15","16-32","33-48","49-64","3","4","5","6","7"))
         if (input$pos == "ALL"){
-            print(ggplot(rookieDealAV, aes(rookieDealAV$Rnd, rookieDealAV$RookieAV,fill = as.factor(Rnd))) + geom_boxplot() + xlab("Round") + ylab("Sqrt(Approximate Value)") + ggtitle("Round vs Approximate Value")) 
+            
+            print(ggplot(ggSubset, aes(Classifier, RookieAV,fill = as.factor(Classifier))) + geom_boxplot() + xlab("Section of the Draft") + ylab("Sqrt(Approximate Value)") + ggtitle("Classifier vs Approximate Value")) 
         }else{
-            posDF <- subset(rookieDealAV, Pos == input$pos)
-            print(ggplot(posDF, aes(posDF$Rnd, posDF$RookieAV,fill = as.factor(Rnd))) + geom_boxplot() + xlab("Round") + ylab("Sqrt(Approximate Value)") + ggtitle(paste("Round vs Approximate Value - Position:", input$pos))) 
+            posDF <- subset(ggSubset, Pos == input$pos)
+            print(ggplot(posDF, aes(Classifier, RookieAV,fill = as.factor(Classifier))) + geom_boxplot() + xlab("Section of the Draft") + ylab("Sqrt(Approximate Value)") + ggtitle(paste("Classifier vs Approximate Value - Position:", input$pos))) 
         }
 
     })
     
     ##By Position Vs Average
     output$PosAvgGraph <- renderPlot({
+      PosSummary <- rookieDealAV[which(rookieDealAV$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAV$DraftYear <= input$draftYrGlobal[2]),] %>% 
+                                         group_by(Classifier,Pos) %>% dplyr::summarize(MedianAV = median(RookieAV))
         if (input$pos == "ALL"|input$pos == "K"){
             
         }else{
             ggSubset <- subset(PosSummary, Pos == input$pos)
-            ggSubset$RndAvg <- ClassifierSummary$MedianAV
+            ggSubset$RndAvg <- ClassifierSummary[ClassifierSummary$Classifier %in% ggSubset$Classifier,]$MedianAV
             ggSubset <- melt(as.data.frame(ggSubset),names(ggSubset)[1:2])
-            ggplot(ggSubset, aes(x = Rnd, y = value, group = variable, colour = variable)) + geom_point(size = 2) + geom_line() + scale_colour_manual(name = "Pick Type", labels = c(input$pos,"All Pos Avg"),values = c("blue","red")) + ggtitle(paste("All Position Average Vs. Average for: ", input$pos)) + xlab("Round") + ylab("Sqrt(Approximate Value)")
+            ggSubset$Classifier <- factor(ggSubset$Classifier,c("Top 5","6-15","16-32","33-48","49-64","3","4","5","6","7"))
+            ggplot(ggSubset, aes(x = Classifier, y = value, group = variable, colour = variable)) + geom_point(size = 2) + geom_line() + scale_colour_manual(name = "Pick Type", labels = c(input$pos,"All Pos Avg"),values = c("blue","red")) + ggtitle(paste("All Position Average Vs. Average for: ", input$pos)) + xlab("Section of the Draft") + ylab("Sqrt(Approximate Value)")
         }
     })
     
     
     ##By Round Graph
     output$RndGraph <- renderPlot({
+      rookieDealAV <- rookieDealAV[which(rookieDealAV$DraftYear >= input$draftYrGlobal[1] & 
+                                           rookieDealAV$DraftYear <= input$draftYrGlobal[2]),]
         if (input$rnd == "ALL"){
             ggplot(subset(rookieDealAV),aes(x = reorder(Pos,RookieAV, FUN = median), y = RookieAV, fill = Pos)) + geom_boxplot() + xlab("Position") + ylab("Sqrt(Approximate Value)") + ggtitle("Position vs AV")
         }else{
@@ -153,18 +200,25 @@ server <- function(input, output) {
     
     ##By Position - ANOVA
     output$PosTable <- renderPrint({
+      rookieDealAV <- rookieDealAV[which(rookieDealAV$DraftYear >= input$draftYrGlobal[1] & 
+                                           rookieDealAV$DraftYear <= input$draftYrGlobal[2]),]
         if (input$pos == "ALL"){
-            posANOVA <- kruskalmc(RookieAV~Rnd , data = rookieDealAV)
+            posANOVA <- kruskalmc(RookieAV~Classifier , data = rookieDealAV)
             posANOVA$dif.com
+            posANOVA <- data.frame(posANOVA$dif.com)
+            posANOVA[order(posANOVA$difference,posANOVA$obs.dif,decreasing = TRUE),]
         }else{
             posDF <- subset(rookieDealAV, Pos == input$pos)
-            posANOVA <- kruskalmc(RookieAV~Rnd , data = posDF)
-            posANOVA$dif.com
+            posANOVA <- kruskalmc(RookieAV~Classifier , data = posDF)
+            posANOVA <- data.frame(posANOVA$dif.com)
+            posANOVA[order(posANOVA$difference,posANOVA$obs.dif,decreasing = TRUE),]
         }
     })
     
     ##By Round - ANOVA
     output$RndTable <- renderPrint({
+      rookieDealAV <- rookieDealAV[which(rookieDealAV$DraftYear >= input$draftYrGlobal[1] & 
+                                           rookieDealAV$DraftYear <= input$draftYrGlobal[2]),]
         if (input$rnd == "ALL"){
             rndANOVA <- kruskalmc(RookieAV~Pos , data = rookieDealAV)
             rndANOVA <- data.frame(rndANOVA$dif.com)
@@ -175,13 +229,30 @@ server <- function(input, output) {
             rndANOVA <- data.frame(rndANOVA$dif.com)
             rndANOVA[order(rndANOVA$difference,rndANOVA$obs.dif,decreasing = TRUE),]
         }
-    })  
+    })
     
+    #Player Probabilities
+    output$PlayerProbTable <- renderPrint({
+      pos <- rookieDealAV[which(rookieDealAV$PlayerID == input$ProbSelect),"Pos"]
+      AV <- rookieDealAV[which(rookieDealAV$PlayerID == input$ProbSelect),"RookieAV"]
+      df_player_prob <- rookieDealAV %>% filter(Pos == pos) %>% group_by(Classifier) %>% 
+        dplyr::summarize(Avg = median(RookieAV),SD = sd(RookieAV)) #get all of them then delete dupes
+      df_player_prob <- data.frame(df_player_prob)
+      df_player_prob <- df_player_prob %>% arrange(match(Classifier,c("Top 5","6-15","16-32","33-48","49-64","3","4","5","6","7")))
+      df_player_prob$Probability <- apply(df_player_prob[,2:3], 1, function(x) pnorm(AV,x[1],x[2],lower.tail = FALSE))
+      df_player_prob$Probability <- label_percent()(df_player_prob$Probability)
+      names(df_player_prob) <- c("Section_of_Draft","Avg","SD","Probability")
+      df_player_prob[,c("Section_of_Draft","Probability")]
+    })
+
+# Tables - Server ---------------------------------------------------------
+#* Players Table - Server --------------------------------------------------
     #Players Table
     output$PlayerTable <-  DT::renderDataTable(DT::datatable({
-        playerData <- rookieDealAVNon[,-1]
-        playerData <- playerData[,c(4:8,1,2,9,16,17,18)] 
-        levels(playerData$Grade) <- c("Bust","Poor Pick","Below Average Pick","Average Pick","Good Pick","Great Pick","Steal")
+        playerData <- rookieDealAVNon[,c('Player','DraftYear','DraftTm','Pos','Rnd','Pick','Classifier','RookieAV','MedianAV','dAV','Grade')]
+        levels(playerData$Grade) <- c("Bust","Poor Pick","Below Average Pick","Average Pick","Good Pick","Great Pick","Steal","Strategic Pick")
+        playerData <- playerData[which(playerData$DraftYear >= input$draftYrGlobal[1] &
+                                         playerData$DraftYear <= input$draftYrGlobal[2]),]
         if (input$team != "ALL"){
             playerData <- subset(playerData, playerData$DraftTm == input$team)
         }
@@ -195,11 +266,95 @@ server <- function(input, output) {
             playerData <- subset(playerData, playerData$DraftYear == input$draftYr)
         }
         playerData
-    },rownames = FALSE,colnames = c("Player","Draft Year","Draft Team", "Pos", "Round","Pick","Classifier","Rookie Contract AV","xAV","dAV","Grade"),caption = "AV = Approximate Value  |  Rookie Contract = 4 years")
-    %>% formatStyle("Grade",color = styleEqual(c("Bust","Poor Pick","Below Average Pick","Average Pick","Good Pick","Great Pick","Steal"),c("#4f0101","#b80000","#ff5500","#808080","#04c729","#017016", "#3495eb")),fontWeight = 'bold')
+    },rownames = FALSE,options = list(columnDefs = 
+                                        list(list(className = 'dt-center', 
+                                                  targets = 1:9))),colnames = c("Player","Draft Year","Draft Team", "Pos", "Round","Pick","Classifier","Actual AV","xAV","dAV","Grade"),caption = "AV: Approximate Value | xAV: Expected Approximate Value | dAV: Actual AV - xAV")
+    %>% formatStyle("Grade",color = styleEqual(c("Bust","Poor Pick","Below Average Pick","Average Pick","Good Pick","Great Pick","Steal","Strategic Pick"),c("#4f0101","#b80000","#ff5500","#808080","#04c729","#017016", "#3495eb","#000000")),fontWeight = 'bold')
         )  #Player Table
+
+
+#* Team / Draft Class Table -----------------------------------------------
     
-    #Dashboard
+    output$Draft_Class_Table <- DT::renderDataTable(DT::datatable({
+    rookieDealAVNon <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                               rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
+    ##Draft Grades
+      ApplyGroups <- function(x) {
+        cut(x, breaks=c(quantile(draftClass$dAV, probs = c(0,0.05,0.25,0.40,0.60,0.75,0.95,1.00))), 
+            labels=c("Terrible Draft","Poor Draft","Below Average Draft","Average Draft","Good Draft","Great Draft","Amazing Draft"), include.lowest=TRUE)
+      }
+
+    #colnames(rookieDealAVNon) <-  c("Pick","Classifier","PlayerID","Player","Draft Year","DraftTm","Pos","Rnd","RookieAV","G","GS","AvgAV","LastSeason","Seasons","PlayerName","YearsSinceDrafted","MedianAV","dAV","Grade") 
+    #Remove 2000 since Tom Brady is only played in the dataset from that draft class
+      #No Grouping  
+    if(length(input$radio_draft_class) == 0 || all("Yr" ==  input$radio_draft_class)){
+      draftClass <- rookieDealAVNon[which(rookieDealAVNon$DraftYear != 2000),] %>% group_by(DraftYear) %>% dplyr::summarize(dAV = round(sum(dAV),0))
+      draftClass <- rank_in_group2(data = draftClass, arrange_var = dAV)
+      colDraftClass<- c("Draft Year","Total dAV","Draft Ranking","Grade")
+      draftClass$Grade <- sapply(draftClass$dAV,ApplyGroups)  
+      names(draftClass)<- colDraftClass
+    }  
+      #By Pos,Team & Yr
+      else if (all(c("Team","Pos","Yr") == input$radio_draft_class)){
+        draftClass <- rookieDealAVNon[which(rookieDealAVNon$DraftYear != 2000),] %>% group_by(DraftTm,Pos, DraftYear) %>% dplyr::summarize(dAV = round(sum(dAV),0))
+        draftClass <- rank_in_group2(data = draftClass,group_var = Pos, arrange_var = dAV)
+        colDraftClass <- c("Draft Team","Position","Draft Year","Total dAV","Draft Ranking","Grade")
+        draftClass$Grade <- sapply(draftClass$dAV,ApplyGroups)  
+        names(draftClass)<- colDraftClass
+      }
+      #By Pos & Yr
+      else if (all(c("Pos","Yr") == input$radio_draft_class)){
+        draftClass <- rookieDealAVNon[which(rookieDealAVNon$DraftYear != 2000),] %>% group_by(Pos, DraftYear) %>% dplyr::summarize(dAV = round(sum(dAV),0))
+        draftClass <- rank_in_group2(data = draftClass,group_var = DraftYear, arrange_var = dAV)
+        colDraftClass <- c("Position","Draft Year","Total dAV","Draft Ranking","Grade")
+        draftClass$Grade <- sapply(draftClass$dAV,ApplyGroups)  
+        names(draftClass)<- colDraftClass
+      }
+      #By Pos,Team
+      else if (all(c("Team","Pos") == input$radio_draft_class)){
+        draftClass <- rookieDealAVNon[which(rookieDealAVNon$DraftYear != 2000),] %>% group_by(DraftTm,Pos) %>% dplyr::summarize(dAV = round(sum(dAV),0))
+        draftClass <- rank_in_group2(data = draftClass,group_var = Pos, arrange_var = dAV)
+        colDraftClass <- c("Draft Team","Position","Total dAV","Draft Ranking","Grade")
+        draftClass$Grade <- ""
+        names(draftClass)<- colDraftClass
+      }    
+      #By Position
+      else if (all("Pos" ==  input$radio_draft_class)){
+        draftClass <- rookieDealAVNon[which(rookieDealAVNon$DraftYear != 2000),] %>% group_by(Pos) %>% dplyr::summarize(dAV = round(sum(dAV),0))
+        draftClass <- rank_in_group2(data = draftClass, arrange_var = dAV)
+        draftClass$Grade <- ""
+        colDraftClass <- c("Position","Total dAV","Draft Ranking","Grade")
+        names(draftClass)<- colDraftClass
+      }      
+      #By Team
+      else if (all("Team" == input$radio_draft_class)){
+        draftClass <- rookieDealAVNon[which(rookieDealAVNon$DraftYear != 2000),] %>% group_by(DraftTm) %>% dplyr::summarize(dAV = round(sum(dAV),0))
+        draftClass <- rank_in_group2(data = draftClass, arrange_var = dAV)
+        draftClass$Grade <- ""
+        colDraftClass <- c("Draft Team","Total dAV","Rank","Grade")
+        names(draftClass)<- colDraftClass
+      }
+      #By Team & Yr
+      else if (all(c("Team","Yr") == input$radio_draft_class)){
+        draftClass <- rookieDealAVNon[which(rookieDealAVNon$DraftYear != 2000),] %>% group_by(DraftTm, DraftYear) %>% dplyr::summarize(dAV = round(sum(dAV),0))
+        draftClass <- rank_in_group2(data = draftClass,group_var = DraftYear, arrange_var = dAV)
+        colDraftClass <- c("Draft Team","Draft Year","Total dAV","Draft Ranking","Grade")
+        draftClass$Grade <- sapply(draftClass$dAV,ApplyGroups)  
+        names(draftClass)<- colDraftClass
+      }
+      #draftClass$Grade <- sapply(draftClass$dAV,ApplyGroups)  
+      #names(draftClass)<- colDraftClass
+      draftClass
+      
+    },rownames = FALSE,filter = "top",options = list(columnDefs = 
+                                                       list(list(className = 'dt-center', 
+                                                                 targets = "_all"))))
+    %>% formatStyle("Grade",color = styleEqual(c("Terrible Draft","Poor Draft","Below Average Draft","Average Draft","Good Draft","Great Draft","Amazing Draft"),c("#4f0101","#b80000","#ff5500","#808080","#04c729","#017016", "#3495eb")),fontWeight = 'bold')
+    )#Draft Class Table
+    
+# Dashboards - Server -----------------------------------------------------
+
+# *Players Dashboard - Server ----------------------------------------------
     #Team Logos
     URLTeam <- reactive({
         a <- nflLogos[which(nflLogos$team_code == input$teamDash),4]
@@ -208,14 +363,17 @@ server <- function(input, output) {
     output$logo <- renderText({ c('<img src="',URLTeam(),'">')})
     
     ##Subset by team,
-        #Best Pick
-    
+
+# **Best Pick ---------------------------------------------------------------
     #PlayerName        
     NameBest <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                   rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                   rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -232,9 +390,12 @@ server <- function(input, output) {
     #Player Photo
     URLBestPlayer <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -243,25 +404,35 @@ server <- function(input, output) {
             a <- a[which(a$DraftYear == input$draftYrTeam),]
         }
         a <- a[which.max(a$dAV),]
-        rvPlayerName <- gsub("[.]","",a$Player)
-        playerName <- gsub(" ","-",rvPlayerName)
-        return(playerName)
+        #rvPlayerName <- gsub("[.]","",a$Player)
+        #playerName <- gsub(" ","-",rvPlayerName)
+        #return(playerName)
+        headshotURL <- a$headshot_url
+        return(headshotURL)
     })
     
         ##Create URL
-    url1 <- "https://tsnimages.tsn.ca/ImageProvider/PlayerHeadshot?seoId="
-    url2 <- "&width=200&height=200"
+    #url1 <- "https://tsnimages.tsn.ca/ImageProvider/PlayerHeadshot?seoId="
+    url2 <- "&w=250&h=200"
     
     output$headshotBest <- renderText({
-        c('<img src="',paste(url1,URLBestPlayer(),url2,sep = ""),'">')
+      if(grepl("espn",URLBestPlayer())){
+        c('<img src="',paste(URLBestPlayer(),url2,sep = ""),'">')
+      }else{
+        c('<img src="',URLBestPlayer(),'">')
+      }
+        
     })
     
     #DraftYear       
     bestYr <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -278,9 +449,12 @@ server <- function(input, output) {
     #Rnd & Pick       
     bestRndPick <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -297,9 +471,12 @@ server <- function(input, output) {
     ##AV
     bestAV<- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -308,7 +485,7 @@ server <- function(input, output) {
             a <- a[which(a$DraftYear == input$draftYrTeam),]
         }
         a <- a[which.max(a$dAV),]
-        return(c("AV, 1st Four Yrs: ",a$RookieAV))
+        return(c("Actual AV: ",a$RookieAV))
     })
     
     output$DashBestAV <- renderText({bestAV()})
@@ -316,9 +493,12 @@ server <- function(input, output) {
     ##xAV
     bestxAV<- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -335,9 +515,12 @@ server <- function(input, output) {
     ##dAV
     bestdAV<- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -355,9 +538,12 @@ server <- function(input, output) {
     #Draft Grade
     bestGrade <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -372,15 +558,17 @@ server <- function(input, output) {
     })
     
     output$DashBestGrade <- renderText({bestGrade()})
-    
-    #Worst Pick_____________________________________
-    
+
+# **Worst Pick --------------------------------------------------------------
     #PlayerName        
     NameWorst <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -396,38 +584,50 @@ server <- function(input, output) {
     
     #Player Photo
     URLWorstPlayer <- reactive({
-        if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
-        }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
-        }
-        if(input$posTeam != "ALL"){
-            a <- a[which(a$Pos == input$posTeam),]
-        }
-        if(input$draftYrTeam != "ALL"){
-            a <- a[which(a$DraftYear == input$draftYrTeam),]
-        }
-        a <- a[which.min(a$dAV),]
-        rvPlayerName <- a$Player
-        playerName <- gsub(" ","-",rvPlayerName)
-        return(playerName)
+      if(input$teamDash == "ALL"){
+        a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                     rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
+      }else{        
+        a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                     rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                     rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
+      }
+      if(input$posTeam != "ALL"){
+        a <- a[which(a$Pos == input$posTeam),]
+      }
+      if(input$draftYrTeam != "ALL"){
+        a <- a[which(a$DraftYear == input$draftYrTeam),]
+      }
+      a <- a[which.min(a$dAV),]
+      #rvPlayerName <- gsub("[.]","",a$Player)
+      #playerName <- gsub(" ","-",rvPlayerName)
+      #return(playerName)
+      headshotURL <- a$headshot_url
+      return(headshotURL)
     })
     
-    
     ##Create URL
-    url1 <- "https://tsnimages.tsn.ca/ImageProvider/PlayerHeadshot?seoId="
-    url2 <- "&width=200&height=200"
+    #url1 <- "https://tsnimages.tsn.ca/ImageProvider/PlayerHeadshot?seoId="
+    url2 <- "&w=250&h=200"
     
     output$headshotWorst <- renderText({
-        c('<img src="',paste(url1,URLWorstPlayer(),url2,sep = ""),'">')
+      if(grepl("espn",URLWorstPlayer())){
+        c('<img src="',paste(URLWorstPlayer(),url2,sep = ""),'">')
+      }else{
+        c('<img src="',URLWorstPlayer(),'">')
+      }
+      
     })
     
     #DraftYear       
     WorstYr <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -444,9 +644,12 @@ server <- function(input, output) {
     #Rnd & Pick       
     WorstRndPick <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -463,9 +666,12 @@ server <- function(input, output) {
     ##AV
     WorstAV<- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -474,7 +680,7 @@ server <- function(input, output) {
             a <- a[which(a$DraftYear == input$draftYrTeam),]
         }
         a <- a[which.min(a$dAV),]
-        return(c("AV, 1st Four Yrs: ",a$RookieAV))
+        return(c("Actual AV: ",a$RookieAV))
     })
     
     output$DashWorstAV <- renderText({WorstAV()})
@@ -482,9 +688,12 @@ server <- function(input, output) {
     ##xAV
     WorstxAV<- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -501,9 +710,12 @@ server <- function(input, output) {
     ##dAV
     WorstdAV<- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -521,9 +733,12 @@ server <- function(input, output) {
     #Draft Grade
     WorstGrade <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -539,11 +754,15 @@ server <- function(input, output) {
     output$DashWorstGrade <- renderText({WorstGrade()})
     
     ##BestGraph
+    UpperLimit <- 20
     BestGraph <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -555,12 +774,12 @@ server <- function(input, output) {
         a <- unique(a$PlayerID)
         playerSubset <- nflData[which(nflData$PlayerID == a),]
         playerSubset <- playerSubset[order(playerSubset$Year),]
-        playerSubset <- playerSubset[c(1:4),]
+        playerSubset <- playerSubset[c(1:8),]
         playerSubset <-playerSubset[complete.cases(playerSubset),]
         playerSubsetScale <- playerSubset
-        playerSubset$AV <- ifelse(playerSubset$AV == 0,1,playerSubset$AV)
-        playerSubset$AV <- ifelse(playerSubset$AV > 15, 15,playerSubset$AV)
-        gg <- ggplot(playerSubset,aes(x = as.character(playerSubset$Year),y = playerSubsetScale$AV,fill = as.factor(playerSubset$AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,ifelse(max(playerSubsetScale$AV) > 15,max(playerSubsetScale$AV),15))) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Rookie Contract Performance - First 4 Seasons")+ theme(legend.position="none")
+        playerSubset$AV <- ifelse(playerSubset$AV <= 0,1,playerSubset$AV)
+        #playerSubset$AV <- ifelse(playerSubset$AV > 20, 20,playerSubset$AV)
+        gg <- ggplot(playerSubset,aes(x = as.character(Year),y = AV,fill = as.factor(AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,ifelse(max(playerSubset$AV) > 20,max(playerSubset$AV),UpperLimit))) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Actual Performance - Max 8 Seasons")+ theme(legend.position="none") + geom_image(aes(image = url), size = 0.075)
         return (gg)
     })
     output$BestGraph <- renderPlot({BestGraph()})
@@ -568,9 +787,12 @@ server <- function(input, output) {
     ##WorstGraph
     WorstGraph <- reactive({
         if(input$teamDash == "ALL"){
-            a <- rookieDealAVNon
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }else{        
-            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash),]
+            a <- rookieDealAVNon[which(rookieDealAVNon$DraftTm == input$teamDash & 
+                                         rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] & 
+                                         rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         }
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
@@ -582,18 +804,19 @@ server <- function(input, output) {
         a <- unique(a$PlayerID)
         playerSubset <- nflData[which(nflData$PlayerID == a),]
         playerSubset <- playerSubset[order(playerSubset$Year),]
-        playerSubset <- playerSubset[c(1:4),]
+        playerSubset <- playerSubset[c(1:8),]
         playerSubset <-playerSubset[complete.cases(playerSubset),]
-        playerSubset$AV <- ifelse(playerSubset$AV == 0,1,playerSubset$AV)
-        playerSubset$AV <- ifelse(playerSubset$AV > 15, 15,playerSubset$AV)
-        gg <-  ggplot(playerSubset,aes(x = as.character(playerSubset$Year),y = playerSubset$AV,fill = as.factor(playerSubset$AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,15)) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Rookie Contract Performance - First 4 Seasons")+ theme(legend.position="none")
+        playerSubset$AV <- ifelse(playerSubset$AV <= 0,1,playerSubset$AV)
+        #playerSubset$AV <- ifelse(playerSubset$AV > 15, 15,playerSubset$AV)
+        gg <-  ggplot(playerSubset,aes(x = as.character(Year),y = AV,fill = as.factor(AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,ifelse(max(playerSubset$AV) > 20,max(playerSubset$AV),UpperLimit))) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Actual Performance - Max 8 Seasons")+ theme(legend.position="none")+ geom_image(aes(image = url), size = 0.075)
         return (gg)
     })
     output$WorstGraph <- renderPlot({WorstGraph()})
     
     #Team Value Boxes
     draftRanking <- reactive({
-        a <- rookieDealAVNon
+        a <- rookieDealAVNon[which(rookieDealAVNon$DraftYear >= input$draftYrGlobal[1] &
+                                     rookieDealAVNon$DraftYear <= input$draftYrGlobal[2]),]
         if(input$posTeam != "ALL"){
             a <- a[which(a$Pos == input$posTeam),]
         }
@@ -609,9 +832,10 @@ server <- function(input, output) {
 
     output$NFLRanking <- renderValueBox({valueBox(ordinal(as.numeric(which(draftRanking()$DraftTm == input$teamDash))),tags$p(paste(input$teamDash," League Ranking"), style = "font-size: 150%;"),icon = icon("list-ol"),color = ifelse(input$teamDash != "ALL",as.character(colorsRank[which(colorsRank$Rank == which(draftRanking()$DraftTm == input$teamDash)),2]),'blue'))})
     output$teamdAV <- renderValueBox({valueBox(draftRanking()[which(draftRanking()$DraftTm == input$teamDash),2],tags$p(paste(input$teamDash,": Total Difference from Expected AV"),style = "font-size: 150%;"),icon = icon("trophy"),color = ifelse(input$teamDash != "ALL",as.character(colorsRank[which(colorsRank$Rank == which(draftRanking()$DraftTm == input$teamDash)),2]),'blue'))})
-    output$teamAV <- renderValueBox({valueBox(draftRanking()[which(draftRanking()$DraftTm == input$teamDash),3],tags$p(paste(input$teamDash,": Total Rookie Contract AV"),style = "font-size: 150%;"),icon = icon("football-ball"),color = ifelse(input$teamDash != "ALL",as.character(colorsRank[which(colorsRank$Rank == which(draftRanking()$DraftTm == input$teamDash)),2]),'blue'))})
+    output$teamAV <- renderValueBox({valueBox(draftRanking()[which(draftRanking()$DraftTm == input$teamDash),3],tags$p(paste(input$teamDash,": Actual AV"),style = "font-size: 150%;"),icon = icon("football-ball"),color = ifelse(input$teamDash != "ALL",as.character(colorsRank[which(colorsRank$Rank == which(draftRanking()$DraftTm == input$teamDash)),2]),'blue'))})
     
-    #Hyperlinks
+
+# HyperLinks - Server -----------------------------------------------------
     url <- a("Click ", href="https://www.pro-football-reference.com/blog/index37a8.html")
     output$AVLink <- renderUI({
         tagList("AV Explanation:", url)
@@ -622,8 +846,15 @@ server <- function(input, output) {
         tagList(urlGit)
     })
     
-
+    urlReddit <- a("u/paulg66 ", href = "https://www.reddit.com/user/paulg66")
+    output$RedditLink <- renderUI({
+      tagList("Created and Maintained by Paul Gallagher - ",urlReddit)
+    })    
     
+    urlFeedback <- a("Feedback Form",href = "https://forms.gle/9LSJ2ze78fWMcgnK6")
+    output$FeedbackLink <- renderUI({
+      tagList(urlFeedback)
+    })
 }
 
 # Run the application 
