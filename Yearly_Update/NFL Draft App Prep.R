@@ -9,23 +9,29 @@ library(nflfastR)
 #setwd("C:/Users/Paul/Documents/R Projects/NFL/NFL Draft")
 
 #--------------Data Load-------------------------------
-data <- read.csv("PlayerData.csv",stringsAsFactors = FALSE)
-draftData <- read.csv("draftData.csv",stringsAsFactors = FALSE)
-draftClassifer <- read.csv("Draft_Classifier.csv")
-nflLogos <- read.csv("NFLLogos.csv",stringsAsFactors = FALSE)
+data <- read.csv("Datasets/PlayerData.csv",stringsAsFactors = FALSE)
+draftData <- read.csv("Datasets/draftData.csv",stringsAsFactors = FALSE)
+draftClassifer <- read.csv("Datasets/Draft_Classifier.csv")
+nflLogos <- read.csv("Datasets/NFLLogos.csv",stringsAsFactors = FALSE)
+espn_id <- read.csv("Datasets/espn_id.csv",stringsAsFactors = FALSE)
 
 #Load from nflverse
 trades <- read.csv("https://raw.githubusercontent.com/nflverse/nfldata/master/data/trades.csv")
 draftDataPFR <- read.csv("https://raw.githubusercontent.com/nflverse/nfldata/master/data/draft_picks.csv")
-rosters <- fast_scraper_roster(2000:2020) #Run once outside of script per year
-#rosters <- rostersBackup
-rostersBackup <- rosters
+#rosters <- fast_scraper_roster(2000:2022) #Run once outside of script per year
+rosters <- rostersBackup
+#rostersBackup <- rosters
 
 #--------------Initial Cleaning-------------------------
 nflData <- data
 nflData[is.na(nflData$AV),"AV"] <- 0 #Update AV's logged as NA to 0
 nflData <- nflData[nflData$Rk != "Rk",] #remove extra title rows
 nflData$Player <- stri_replace_all_regex(nflData$Player,"[*]","")
+
+draftData[,1] <- NULL #Remove row number column from csv export
+espn_id[,1] <- NULL
+
+espn_id$birth_date <- as.Date(espn_id$birth_date)
 
 #Calculate Current Year
 thisYear <- as.integer(format(Sys.Date(), "%Y"))
@@ -53,7 +59,7 @@ names(TB12) <- names(draftData)
 draftData <- rbind(draftData,TB12)
 
 #Fix Josh Allen Duplicate
-nflData[which(nflData$Player == "Josh Allen" & nflData$Tm == "JAX"),c("Player")]<- "Josh Allen."
+nflData[which(nflData$Player == "Josh Allen" & nflData$Team == "JAX"),c("Player")]<- "Josh Allen."
 draftData[which(draftData$Player == "Josh Allen" & draftData$Tm == "JAX"),c("Player")] <- "Josh Allen."
 
 #Create Unique PlayerID
@@ -61,11 +67,7 @@ nflData$PlayerID <- paste(nflData$Player,nflData$Draft, sep = "")
 draftData$PlayerID <- paste(draftData$Player,draftData$Rnd, "-",draftData$Pick, sep="")
 
 #Remove Duplicates
-nflData <- nflData[!duplicated(nflData[,c("Year","PlayerID")]),]
-
-#Create PFR ID Lookup Table
-pfrLookup <- draftDataPFR[,c("season","round","pick","pfr_id")]
-names(pfrLookup) <- c("DraftYear","Rnd","Pick","pfr_id")
+nflData <- nflData[!duplicated(nflData[,c("Season","PlayerID")]),]
 
 #-------------Merge Draft & NFL Data----------------------------
 #Prep Files for Merging
@@ -74,40 +76,41 @@ names(draftYrLookup) <- c("PlayerID","DraftYear","DraftTm","Pos","Rnd","Pick","P
 PlayerNameLookup <- draftYrLookup[,c("PlayerID","PlayerName")]
 
 ##Add Draft Year to Season Data
-nflData<- merge(nflData,draftYrLookup, by = "PlayerID", all.y = TRUE)
+nflData<- merge(nflData,draftYrLookup, by = "PlayerID",all.x = TRUE, all.y = TRUE)
 
 #Find out if player is still on their draft team today
-currentTeam <- nflData %>% filter((thisYear-1)==Year & Tm == DraftTm)
+currentTeam <- nflData %>% filter((thisYear-1)==Season & Team == DraftTm)
 currentTeam <- data.frame(currentTeam$PlayerID)
 currentTeam[,"OnDraftTm"] <- TRUE
 names(currentTeam) <- c("PlayerID","OnDraftTm")
 
 #When player change teams mid-season, change tm to drafttm
-nflData$Tm <- ifelse(nflData$Tm == '2TM',nflData$DraftTm,nflData$Tm)
-nflData$Tm <- ifelse(nflData$Tm == '3TM',nflData$DraftTm,nflData$Tm)
-nflData$Tm <- ifelse(nflData$Tm == '4TM',nflData$DraftTm,nflData$Tm)
+nflData$Team <- ifelse(nflData$Team == '2TM',nflData$DraftTm,nflData$Team)
+nflData$Team <- ifelse(nflData$Team == '3TM',nflData$DraftTm,nflData$Team)
+nflData$Team <- ifelse(nflData$Team == '4TM',nflData$DraftTm,nflData$Team)
+nflData$Team <-  ifelse(str_length(nflData$Team) > 3,nflData$DraftTm,nflData$Team)
 
 #Find first season for each player
-nflData$Year <- as.numeric(nflData$Year)
-firstYr <- aggregate(Year~PlayerID,data = nflData, min)
+nflData$Season <- as.numeric(nflData$Season)
+firstYr <- aggregate(Season~PlayerID,data = nflData, min)
 names(firstYr) <- c("PlayerID","FirstYear")
 nflData <- merge(nflData,firstYr,by = "PlayerID",all.x = TRUE)
 nflData$DraftYear <- ifelse(is.na(nflData$DraftYear),nflData$FirstYear,nflData$DraftYear)
 nflData <- nflData[nflData$DraftYear >= 2000,]
 
 #convert colums to numeric
-nflData$Year <- as.numeric(nflData$Year)
+nflData$Season <- as.numeric(nflData$Season)
 nflData$DraftYear <- as.numeric(nflData$DraftYear)
 nflData$AV <- as.numeric(nflData$AV)
 nflData$G <- as.numeric(nflData$G)
 nflData$GS <- as.numeric(nflData$GS)
 
 #Calculate Season after being drafted
-nflData$Season <- nflData$Year - nflData$DraftYear + 1
+nflData$Season_Num <- nflData$Season - nflData$DraftYear + 1
 
 #--------------Data Standardization & Ad-hoc Updates----
 #Standardize Positions
-nflData$Pos <- stri_replace_all_regex(nflData$Pos,"S","DB")
+nflData$Pos <- stri_replace_all_regex(nflData$Pos,"SAF","DB")
 nflData$Pos <- stri_replace_all_regex(nflData$Pos,"CB","DB")
 nflData$Pos <- stri_replace_all_regex(nflData$Pos,"DL","DT")
 nflData$Pos <- stri_replace_all_regex(nflData$Pos,"NT","DT")
@@ -115,36 +118,40 @@ nflData$Pos <- stri_replace_all_regex(nflData$Pos,"DE","EDGE")
 nflData$Pos <- stri_replace_all_regex(nflData$Pos,"OLB","EDGE")
 nflData$Pos <- stri_replace_all_regex(nflData$Pos,"ILB","LB")
 nflData$Pos <- stri_replace_all_regex(nflData$Pos,"OL","G")
+nflData$Pos <- stri_replace_all_regex(nflData$Pos,"OT","T")
 
 #Update Teams for Eli/Rivers Trade
 nflData[which(nflData$PlayerID == "Eli Manning1-1"),c("DraftTm")] <- "NYG"
-nflData[which(nflData$PlayerID == "Eli Manning1-1"),c("Tm")] <- "NYG"
+nflData[which(nflData$PlayerID == "Eli Manning1-1"),c("Team")] <- "NYG"
 nflData[which(nflData$PlayerID == "Philip Rivers1-4"),c("DraftTm")] <- "LAC"
-nflData[which(nflData$PlayerID == "Philip Rivers1-4"),c("Tm")] <- "LAC"
+nflData[which(nflData$PlayerID == "Philip Rivers1-4"),c("Team")] <- "LAC"
 
 ##Fix Relocated Teams
 nflData$DraftTm <- stri_replace_all_regex(nflData$DraftTm ,"STL","LAR")
 nflData$DraftTm <- stri_replace_all_regex(nflData$DraftTm ,"SDG","LAC")
 nflData$DraftTm <- stri_replace_all_regex(nflData$DraftTm ,"OAK","LVR")
-nflData$Tm <- stri_replace_all_regex(nflData$Tm ,"STL","LAR")
-nflData$Tm <- stri_replace_all_regex(nflData$Tm ,"SDG","LAC")
-nflData$Tm <- stri_replace_all_regex(nflData$Tm ,"OAK","LVR")
+nflData$Team <- stri_replace_all_regex(nflData$Team ,"STL","LAR")
+nflData$Team <- stri_replace_all_regex(nflData$Team ,"SDG","LAC")
+nflData$Team <- stri_replace_all_regex(nflData$Team ,"OAK","LVR")
 
 #--------------AV Calculations Start--------------------------
 #Fix years for drafted players who never played
-nflData$Season <- ifelse(is.na(nflData$Season),-1,nflData$Season)
+nflData$Season_Num <- ifelse(is.na(nflData$Season_Num),-1,nflData$Season_Num)
 nflData$FirstYear <- ifelse(is.na(nflData$FirstYear),nflData$DraftYear,nflData$FirstYear)
-nflData$Year <- ifelse(is.na(nflData$Year),nflData$DraftYear,nflData$Year)
+nflData$Season_Num <- ifelse(is.na(nflData$Season_Num),nflData$DraftYear,nflData$Season_Num)
 nflData$AV <- ifelse(is.na(nflData$AV),0,nflData$AV)
-nflData$Tm <- ifelse(is.na(nflData$Tm),nflData$DraftTm,nflData$Tm)
+nflData$Team <- ifelse(is.na(nflData$Team),nflData$DraftTm,nflData$Team)
 
 #Add logo URL for output graphs
-nflData <- merge(nflData,nflLogos[,c("team_code","url")],by.x='Tm', by.y='team_code',all.x = TRUE)
+nflData <- merge(nflData,nflLogos[,c("team_code","url")],by.x='Team', by.y='team_code',all.x = TRUE)
+
+#Remove Undrafted Players
+nflData <- nflData[complete.cases(nflData$DraftYear),]
 
 #Find average AV during rookie deal
-rookieDealAV <- nflData %>% filter(Season < 5) %>% group_by(PlayerID,Player,DraftYear,DraftTm,Pos,Rnd,Pick) %>% 
+rookieDealAV <- nflData %>% filter(Season_Num < 5) %>% group_by(PlayerID,Player,DraftYear,DraftTm,Pos,Rnd,Pick) %>% 
   dplyr::summarize(RookieAV = sum(AV, na.rm = TRUE),G = sum(G,na.rm = TRUE), GS = sum(GS, na.rm = TRUE),
-                   AvgAV = mean(AV, na.rm = TRUE),LastSeason = max(Year, na.rm = TRUE),Seasons = dplyr::n())
+                   AvgAV = mean(AV, na.rm = TRUE),LastSeason = max(Season_Num, na.rm = TRUE),Seasons = dplyr::n())
 rookieDealAV <-merge(rookieDealAV,PlayerNameLookup, by = "PlayerID")
 rookieDealAV$Player <- rookieDealAV$PlayerName
 rookieDealAV <- rookieDealAV[complete.cases(rookieDealAV),]
@@ -153,7 +160,7 @@ rookieDealAV$Classifier <- factor(rookieDealAV$Classifier, levels = (c("Top 5", 
 rookieDealAV <- rookieDealAV[complete.cases(rookieDealAV),]
 
 #Remove players who were cut before playing a game for their draft team
-cutPlayers <- nflData[which(nflData$Tm != nflData$DraftTm & nflData$FirstYear == nflData$Year),]$PlayerID
+cutPlayers <- nflData[which(nflData$Team != nflData$DraftTm & nflData$FirstYear == nflData$Season),]$PlayerID
 rookieDealAV[rookieDealAV$PlayerID %in% cutPlayers,]$RookieAV <- 0
 
 ##Calculate Years since Drafted
@@ -167,9 +174,9 @@ rookieDealAV$OnDraftTm[is.na(rookieDealAV$OnDraftTm)] <- FALSE
 
 #--------------Bonus AV and AV Extrapolation-------------------
 #Add years with draft team after rookiedeal
-BonusAV <- nflData %>% filter(Season > 4,Season <= 8,DraftTm == Tm) %>% group_by(PlayerID,DraftTm,Tm) %>% 
-  dplyr::summarize(BonusAV = sum(AV, na.rm = TRUE),Bonus_Seasons = max(Season,na.rm = TRUE)-4,
-                   Last_Year_Bonus = max(Year,na.rm = TRUE))
+BonusAV <- nflData %>% filter(Season_Num > 4,Season_Num <= 8,DraftTm == Team) %>% group_by(PlayerID,DraftTm,Team) %>% 
+  dplyr::summarize(BonusAV = sum(AV, na.rm = TRUE),Bonus_Seasons = max(Season_Num,na.rm = TRUE)-4,
+                   Last_Year_Bonus = max(Season,na.rm = TRUE))
 BonusAV <- BonusAV[,c("PlayerID","BonusAV","Bonus_Seasons","Last_Year_Bonus")]
 rookieDealAV <- merge(rookieDealAV,BonusAV,all.x = TRUE)
 rookieDealAV$BonusAV[is.na(rookieDealAV$BonusAV)] <- 0 #Replace NAs with 0
@@ -250,24 +257,41 @@ rookieDealAVNon$Grade <- sapply(rookieDealAVNon$dAV,ApplyGroups)
 
 #-------------Add Player Headshots----
 #Most Recent Image
-rosters <- rosters[order(rosters$season,decreasing = TRUE),] 
-rosters <- rosters[!duplicated(rosters$pfr_id),]
+rosters <- rosters[order(rosters$season,decreasing = TRUE),]
+#rosters$headshot_id <- paste(rosters$entry_year,rosters$draft_number,sep = "_")
 
-headshots <- rosters[,c("pfr_id","headshot_url")]
-rookieDealAVNon <- join(rookieDealAVNon,headshots, by = "pfr_id", type = "left" )
+#if espn Id is missing
+rosters$birth_date <- as.Date(rosters$birth_date)
+rosters <- merge(rosters,espn_id, all.x = TRUE) 
+rosters <- rosters[!duplicated(rosters$full_name),]
+rosters$espn_id2 <- as.character(rosters$espn_id2)
+rosters$espn_id <- dplyr::coalesce(rosters$espn_id,rosters$espn_id2)
+rosters$headshot_url <- ifelse(!complete.cases(rosters$espn_id),rosters$headshot_url,
+                               paste("https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/",rosters$espn_id,".png&w=250&h=200",sep = ""))
+
+headshots <- rosters[,c("full_name","headshot_url")]
+names(headshots) <- c("Player","headshot_url")
+#rookieDealAVNon$headshot_id <- paste(rookieDealAVNon$DraftYear,rookieDealAVNon$Pick,sep = "_")
+rookieDealAVNon <- join(rookieDealAVNon,headshots, by= "Player", type = "left" )
+
+rookieDealAVNon$headshot_url <- str_replace(rookieDealAVNon$headshot_url,"f_auto,q_auto","f_auto,q_auto,w_250,h_200")
 
 #Ad-hoc Updates
-rookieDealAVNon$headshot_url[which(rookieDealAVNon$Player == "JaMarcus Russell")] <- "https://www.pro-football-reference.com/req/20180910/images/headshots/RussJa00_2019.jpg"
+rookieDealAVNon$headshot_url[which(rookieDealAVNon$Player == "JaMarcus Russell")] <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/10446.png&w=250&h=200"
 rookieDealAVNon$headshot_url[which(rookieDealAVNon$Player == "Clinton Portis")]<- "https://www.pro-football-reference.com/req/20180910/images/headshots/PortCl00.jpg"
 rookieDealAVNon$headshot_url[which(rookieDealAVNon$Player == "Brian Westbrook")] <- "https://www.pro-football-reference.com/req/20180910/images/headshots/WestBr00_2017.jpg"
 rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID == "Charles Rogers1-2")] <-"https://www.pro-football-reference.com/req/20180910/images/headshots/RogeCh01_2019.jpg"
-rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID == "Chris Williams1-14")] <- "http://static.nfl.com/static/content/public/static/img/fantasy/transparent/200x200/WIL188018.png"
 rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID == "Freddie Mitchell1-25")] <- "https://www.pro-football-reference.com/players/M/MitcFr00.htm"
 rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID == "Mike Adams2-56")] <- "https://www.pro-football-reference.com/req/20180910/images/headshots/AdamMi02_2019.jpg"
 rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID == "Jonathan Baldwin1-26")] <- "https://www.pro-football-reference.com/req/20180910/images/headshots/BaldJo00_2019.jpg"
-
+rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID == "Darnell Dockett3-64")] <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/5589.png&w=250&h=200"
+rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID =="NaVorro Bowman3-91")] <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/13262.png&w=250&h=200"
+rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID =="Josh Allen1-7")] <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/3918298.png&w=250&h=200"
+rookieDealAVNon$headshot_url[which(rookieDealAVNon$PlayerID =="Josh Allen.1-7")] <- "https://static.www.nfl.com/image/private/f_auto,q_auto,w_250,h_200/league/vs1gvoadc6we63prkatk"
+  
 #Update NA headshot url's to generic NFL fantasy silhouette
-rookieDealAVNon[is.na(rookieDealAVNon$headshot_url),"headshot_url"] <- "http://static.nfl.com/static/content/public/static/img/fantasy/transparent/200x200/WIL442916.png"
+rookieDealAVNon[is.na(rookieDealAVNon$headshot_url),"headshot_url"] <- "https://static.www.nfl.com/image/private/f_auto,q_auto,w_250,h_200/league/j9utxwp9846osapesksk.png"
+
 
 #-------------Write files to folder----
 write.csv(rookieDealAV,"rookieDealAV.csv",row.names=FALSE,fileEncoding ="UTF-8")
@@ -275,5 +299,5 @@ write.csv(rookieDealAVNon,"rookieDealAVNon.csv",row.names=FALSE,fileEncoding ="U
 write.csv(nflData,"NFLData.csv",row.names=FALSE,fileEncoding="UTF-8")
 
 #Extra stuff for testing-----
-noId <- rookieDealAVNon[rookieDealAVNon$pfr_id == "",]
+noId <- rookieDealAVNon[rookieDealAVNon$smart_id == "",]
 #noID[noId$Player %in% trades$pfr_name,]
