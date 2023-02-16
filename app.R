@@ -14,12 +14,19 @@ library(pgirmess)
 library(dplyr)
 library(markdown)
 library(lamisc)
+library(reactable)
+library(reactablefmtr)
+library(sparkline)
+library(formattable)
+library(httr)
 
 #Load Data
 nflData <- read.csv("NFLData.csv",stringsAsFactors = FALSE)
 rookieDealAV <- read.csv("rookieDealAV.csv",stringsAsFactors = FALSE)
 rookieDealAVNon <- read.csv("rookieDealAVNon.csv",stringsAsFactors = FALSE)
 nflLogos <- read.csv("NFLLogos.csv",stringsAsFactors = FALSE)
+player_archetypes_sum <- read.csv("player_archetypes_sum.csv",stringsAsFactors = FALSE,,row.names = 'X.')
+starter_table <- read.csv("starter_table.csv",stringsAsFactors = FALSE)
 
 RndSummary <- rookieDealAV %>% group_by(Rnd) %>% dplyr::summarize(MedianAV = median(RookieAV),n = n())
 ClassifierSummary <- rookieDealAV %>% group_by(Classifier) %>% dplyr::summarize(MedianAV = median(RookieAV),n = n())
@@ -52,8 +59,35 @@ ui <- navbarPage("NFL Draft",
                                                     box(title = "Best Draft Pick",status = "success",solidHeader = TRUE, fluidRow(column(5,htmlOutput("headshotBest"),h3(textOutput("DashBestName")),h4(htmlOutput("DashBestGrade")),h4(textOutput("DashBestYr")),h4(textOutput("DashBestRndPick")),br(),h4(textOutput("DashBestAV")),h4(textOutput("DashBestxAV")),h4(htmlOutput("DashBestdAV"))),column(7,plotOutput({"BestGraph"})))),
                                                     box(title = "Worst Draft Pick",status = "danger", solidHeader = TRUE,fluidRow(column(5,htmlOutput("headshotWorst"),h3(textOutput("DashWorstName")),h4(htmlOutput("DashWorstGrade")),h4(textOutput("DashWorstYr")),h4(textOutput("DashWorstRndPick")),br(),h4(textOutput("DashWorstAV")),h4(textOutput("DashWorstxAV")),h4(htmlOutput("DashWorstdAV"))),column(7,plotOutput({"WorstGraph"}))))
                                                   ),#fluidRow draft picks
-                                                  "Viewing on a mobile device? Click the 3 solid white lines near the top of the page to change teams",br(),br(),"AV = Approximate Value",br(),"Players Drafted From 2001-2021",br(),"Data Source: www.pro-football-reference.com",br(),br(),uiOutput('RedditLink'),br(),uiOutput('GitHubLink'),uiOutput("FeedbackLink"))#body
+                                                  "Viewing on a mobile device? Click the 3 solid white lines near the top of the page to change teams",br(),br(),"AV = Approximate Value",br(),"Players Drafted From 2001-2022",br(),"Data Source: www.pro-football-reference.com",br(),br(),uiOutput('RedditLink'),br(),uiOutput('GitHubLink'),uiOutput("FeedbackLink"))#body
                  )),#Teams   
+
+                 #--------------------------Draft Optimizer------------------------------
+                 tabPanel('Draft Optimizer',
+                          tabsetPanel(type = "tabs",
+                                      tabPanel("By Position",
+                                               titlePanel("Draft Pick by Position Optimizer"),
+                                               fluidRow(
+                                                 column(3,
+                                                        selectInput("posOptimizer","Position",list("QB","RB","WR","TE","T","G","C","DT","EDGE","LB","DB"))
+                                                 )
+                                               ),
+                                               #fluidrow
+                                               markdown(
+                                                 '       **Probability:** Is the probability of drafting a player who is **at least** as good as the player type, or better. <br />
+                                                         **Vs Avg:** The difference the selected position and all other positions, for that player type and draft classifier.
+                                                 '
+                                               ),#markdown
+                                               reactableOutput("PosTableOptimizer"),
+                                               markdown(
+                                                 '__________________________________________________________________________________________________________________________ <br />
+                                                 ### Player Type Examples'
+                                               ),#markdown
+                                               column(6,htmlOutput("PlayerArchetypes"))  
+                                      )#tabPanel
+                          )#tabset Panel
+                 ),#Draft Optimizer
+                 
                  #-----------------------Tables------------------------------              
                  tabPanel("Tables",
                           tabsetPanel(type = "tabs",
@@ -87,6 +121,7 @@ ui <- navbarPage("NFL Draft",
                                       )#Draft Years
                           )#Tabset Panel               
                  ),#Tables  
+                 
                  #--------------------------Statistical Tests-------------------------------
                  tabPanel("Statistical Tests",navbarPage("",
                                                          tabPanel("ANOVA - By Position",             
@@ -408,6 +443,8 @@ server <- function(input, output,session) {
         #playerName <- gsub(" ","-",rvPlayerName)
         #return(playerName)
         headshotURL <- a$headshot_url
+        if(httr::http_error(headshotURL)){
+          headshotURL <- "https://static.www.nfl.com/image/private/f_auto,q_auto,w_250,h_200/league/j9utxwp9846osapesksk.png"}
         return(headshotURL)
     })
     
@@ -603,6 +640,8 @@ server <- function(input, output,session) {
       #playerName <- gsub(" ","-",rvPlayerName)
       #return(playerName)
       headshotURL <- a$headshot_url
+      if(httr::http_error(headshotURL)){
+        headshotURL <- "https://static.www.nfl.com/image/private/f_auto,q_auto,w_250,h_200/league/j9utxwp9846osapesksk.png"}
       return(headshotURL)
     })
     
@@ -773,13 +812,13 @@ server <- function(input, output,session) {
         a <- a[which.max(a$dAV),]
         a <- unique(a$PlayerID)
         playerSubset <- nflData[which(nflData$PlayerID == a),]
-        playerSubset <- playerSubset[order(playerSubset$Year),]
+        playerSubset <- playerSubset[order(playerSubset$Season),]
         playerSubset <- playerSubset[c(1:8),]
         playerSubset <-playerSubset[complete.cases(playerSubset),]
         playerSubsetScale <- playerSubset
         playerSubset$AV <- ifelse(playerSubset$AV <= 0,1,playerSubset$AV)
         #playerSubset$AV <- ifelse(playerSubset$AV > 20, 20,playerSubset$AV)
-        gg <- ggplot(playerSubset,aes(x = as.character(Year),y = AV,fill = as.factor(AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,ifelse(max(playerSubset$AV) > 20,max(playerSubset$AV),UpperLimit))) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Actual Performance - Max 8 Seasons")+ theme(legend.position="none") + geom_image(aes(image = url), size = 0.075)
+        gg <- ggplot(playerSubset,aes(x = as.character(Season),y = AV,fill = as.factor(AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,ifelse(max(playerSubset$AV) > 20,max(playerSubset$AV),UpperLimit))) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Actual Performance - Max 8 Seasons")+ theme(legend.position="none") + geom_image(aes(image = url), size = 0.075)
         return (gg)
     })
     output$BestGraph <- renderPlot({BestGraph()})
@@ -803,12 +842,12 @@ server <- function(input, output,session) {
         a <- a[which.min(a$dAV),]
         a <- unique(a$PlayerID)
         playerSubset <- nflData[which(nflData$PlayerID == a),]
-        playerSubset <- playerSubset[order(playerSubset$Year),]
+        playerSubset <- playerSubset[order(playerSubset$Season),]
         playerSubset <- playerSubset[c(1:8),]
         playerSubset <-playerSubset[complete.cases(playerSubset),]
         playerSubset$AV <- ifelse(playerSubset$AV <= 0,1,playerSubset$AV)
         #playerSubset$AV <- ifelse(playerSubset$AV > 15, 15,playerSubset$AV)
-        gg <-  ggplot(playerSubset,aes(x = as.character(Year),y = AV,fill = as.factor(AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,ifelse(max(playerSubset$AV) > 20,max(playerSubset$AV),UpperLimit))) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Actual Performance - Max 8 Seasons")+ theme(legend.position="none")+ geom_image(aes(image = url), size = 0.075)
+        gg <-  ggplot(playerSubset,aes(x = as.character(Season),y = AV,fill = as.factor(AV)))+ geom_bar(stat = "identity",width = 0.60) + scale_fill_manual(values = as.vector(factor(subset(colorsBar,AV %in% playerSubset$AV)$color))) + scale_y_continuous(limits = c(0,ifelse(max(playerSubset$AV) > 20,max(playerSubset$AV),UpperLimit))) + xlab("Year") + ylab("Approximate Value" )+ ggtitle("Actual Performance - Max 8 Seasons")+ theme(legend.position="none")+ geom_image(aes(image = url), size = 0.075)
         return (gg)
     })
     output$WorstGraph <- renderPlot({WorstGraph()})
@@ -855,6 +894,171 @@ server <- function(input, output,session) {
     output$FeedbackLink <- renderUI({
       tagList(urlFeedback)
     })
+    
+# Draft Optimizer ---------------------------------------------------------
+    #By Position ----------------------------------------------------------
+    
+    #Reactable  -----------------------------------------------------------
+    colors_palette_avg <- c("#e24115","#fe9d00","#fdce02","#f0f2f5","#77c000","#019a48")
+    output$PosTableOptimizer <- renderReactable({
+        posProbTable <- subset(starter_table, starter_table$Pos == input$posOptimizer)
+      reactable(
+        posProbTable,
+        theme = espn(centered = TRUE),
+        compact = TRUE,
+        columnGroups = list(
+          colGroup(name = "8-Yr Starter", columns = c("Probability8","Avg8")),
+          colGroup(name = "4-Yr Starter", columns = c("Probability4","Avg4")),
+          colGroup(name = "2-Yr Starter", columns = c("Probability2","Avg2")),
+          colGroup(name = "Career Backup", columns = c("ProbabilityB","AvgB")),
+          colGroup(name = "Non-Roster Player", columns = c("ProbabilityN","AvgN"))
+        ),#colGroups
+        columns = list(
+          # 8 - Year Starter
+          Probability8 = colDef(name = 'Probability',
+                                align = 'left',
+                                cell = data_bars(
+                                  posProbTable,
+                                  max_value = 1,
+                                  min_value = 0,
+                                  fill_color_ref = "color8",
+                                  number_fmt = scales::percent_format(accuracy = 0.1),
+                                  force_outside = c(0,0.4),
+                                  text_position = "above",
+                                  round_edges = TRUE
+                                ),
+                                style = list(borderLeft = "1px dashed rgba(0, 0, 0, 0.3)")                          
+          ),#prob8
+          Avg8 = colDef(name = "vs Avg",
+                        align = "center",
+                        maxWidth = 65,
+                        cell = color_tiles(
+                          posProbTable,
+                          number_fmt = scales::percent_format(accuracy = 0.1),
+                          colors = colors_palette_avg,
+                          box_shadow = TRUE,
+                          span = c("Avg8","Avg4","Avg2","AvgB","AvgN"))
+          ),#Avg8
+          
+          # 4 - Year Starter
+          Probability4 = colDef(name = 'Probability',
+                                align = 'left',
+                                cell = data_bars(
+                                  posProbTable,
+                                  max_value = 1,
+                                  min_value = 0,
+                                  fill_color_ref = "color4",
+                                  number_fmt = scales::percent_format(accuracy = 0.1),
+                                  force_outside = c(0,0.4),
+                                  text_position = "above",
+                                  round_edges = TRUE
+                                ),
+                                style = list(borderLeft = "1px dashed rgba(0, 0, 0, 0.3)")                          
+          ),#prob4
+          Avg4 = colDef(name = "vs Avg",
+                        align = "center",
+                        maxWidth = 65,
+                        cell = color_tiles(
+                          starter_table,
+                          number_fmt = scales::percent_format(accuracy = 0.1),
+                          colors = colors_palette_avg,
+                          box_shadow = TRUE,
+                          span = c("Avg8","Avg4","Avg2","AvgB","AvgN"))
+          ),#Avg4
+          
+          # 2 - Year Starter
+          Probability2 = colDef(name = 'Probability',
+                                align = 'left',
+                                cell = data_bars(
+                                  posProbTable,
+                                  max_value = 1,
+                                  min_value = 0,
+                                  fill_color_ref = "color2",
+                                  number_fmt = scales::percent_format(accuracy = 0.1),
+                                  force_outside = c(0,0.4),
+                                  text_position = "above",
+                                  round_edges = TRUE
+                                ),
+                                style = list(borderLeft = "1px dashed rgba(0, 0, 0, 0.3)")                          
+          ),#prob2
+          Avg2 = colDef(name = "vs Avg",
+                        align = "center",
+                        maxWidth = 65,
+                        cell = color_tiles(
+                          starter_table,
+                          number_fmt = scales::percent_format(accuracy = 0.1),
+                          colors = colors_palette_avg,
+                          box_shadow = TRUE,
+                          span = c("Avg8","Avg4","Avg2","AvgB","AvgN"))
+          ),#Avg2
+          
+          # Backup
+          ProbabilityB = colDef(name = 'Probability',
+                                align = 'left',
+                                cell = data_bars(
+                                  posProbTable,
+                                  max_value = 1,
+                                  min_value = 0,
+                                  fill_color_ref = "colorB",
+                                  number_fmt = scales::percent_format(accuracy = 0.1),
+                                  force_outside = c(0,0.4),
+                                  text_position = "above",
+                                  round_edges = TRUE
+                                ),
+                                style = list(borderLeft = "1px dashed rgba(0, 0, 0, 0.3)")                          
+          ),#probB
+          AvgB = colDef(name = "vs Avg",
+                        align = "center",
+                        maxWidth = 65,
+                        cell = color_tiles(
+                          starter_table,
+                          number_fmt = scales::percent_format(accuracy = 0.1),
+                          colors = colors_palette_avg,
+                          box_shadow = TRUE,
+                          span = c("Avg8","Avg4","Avg2","AvgB","AvgN"))
+          ),#AvgB
+          
+          # Non-Roster
+          ProbabilityN = colDef(name = 'Probability',
+                                align = 'left',
+                                cell = data_bars(
+                                  posProbTable,
+                                  max_value = 1,
+                                  min_value = 0,
+                                  fill_color_ref = "colorN",
+                                  number_fmt = scales::percent_format(accuracy = 0.1),
+                                  force_outside = c(0,0.4),
+                                  text_position = "above",
+                                  round_edges = TRUE
+                                ),
+                                style = list(borderLeft = "1px dashed rgba(0, 0, 0, 0.3)")                          
+          ),#prob4
+          AvgN = colDef(name = "vs Avg",
+                        align = "center",
+                        maxWidth = 65,
+                        cell = color_tiles(
+                          starter_table,
+                          number_fmt = scales::percent_format(accuracy = 0.1),
+                          colors = colors_palette_avg,
+                          box_shadow = TRUE,
+                          span = c("Avg8","Avg4","Avg2","AvgB","AvgN"))
+          ),#AvgN
+          color8 = colDef(show = FALSE),
+          color4 = colDef(show = FALSE),
+          color2 = colDef(show = FALSE),
+          colorB = colDef(show = FALSE),
+          colorN = colDef(show = FALSE)
+        )#column list
+      )#reacttable
+    })#Pos Table Optimizer
+    
+    #formattable - PlayerArchetypes
+    names(player_archetypes_sum) <- c("Player Type","Name","Draft Team","Pos","Total_AV","AV by Season")
+    output$PlayerArchetypes <- renderUI({
+      player_archetypes_pos <- subset(player_archetypes_sum, player_archetypes_sum$Pos == input$posOptimizer)
+      player_archetypes_pos  %>% formattable() %>%  formattable::as.htmlwidget() %>% spk_add_deps()
+    })#formattable - PlayerArchetypes
+    
 }
 
 # Run the application 
